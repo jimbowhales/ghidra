@@ -65,6 +65,9 @@ public class BitFieldPlacementComponent extends JPanel {
 	private int editOrdinal = -1;
 	private DataTypeComponent editComponent;
 
+	private static final int BYTE_SIZE_LIMIT = 10240;
+	private boolean tooManyBytesToHandle = false;
+
 	public static class BitFieldLegend extends JPanel {
 
 		BitFieldLegend(DataTypeComponent viewedBitfield) {
@@ -237,23 +240,27 @@ public class BitFieldPlacementComponent extends JPanel {
 	}
 
 	void refresh(int bitSize, int bitOffset) {
-		bitFieldAllocation = new BitFieldAllocation(bitSize, bitOffset);
-		updatePreferredSize();
-		repaint();
+		if (checkIsEnabled()) {
+			bitFieldAllocation = new BitFieldAllocation(bitSize, bitOffset);
+			updatePreferredSize();
+			repaint();
+		}
 	}
 
 	void refresh(int byteSize, int byteOffset, int bitSize, int bitOffset) {
 		this.allocationByteOffset = byteOffset;
 		this.allocationByteSize = byteSize;
-		bitFieldAllocation = new BitFieldAllocation(bitSize, bitOffset);
-		updatePreferredSize();
-		repaint();
+		if (checkIsEnabled()) {
+			bitFieldAllocation = new BitFieldAllocation(bitSize, bitOffset);
+			updatePreferredSize();
+			repaint();
+		}
 	}
 
 	void updateAllocation(int byteSize, int byteOffset) {
 		this.allocationByteOffset = byteOffset;
 		this.allocationByteSize = byteSize;
-		if (bitFieldAllocation != null) {
+		if (checkIsEnabled() && bitFieldAllocation != null) {
 			bitFieldAllocation.refresh();
 			repaint();
 		}
@@ -267,6 +274,17 @@ public class BitFieldPlacementComponent extends JPanel {
 		return allocationByteSize;
 	}
 
+	// Check this before doing expensive things.
+	boolean checkIsEnabled() {
+		boolean oldState = tooManyBytesToHandle;
+		tooManyBytesToHandle = allocationByteSize > BYTE_SIZE_LIMIT;
+		if (oldState != tooManyBytesToHandle) {
+			// TBD: Show a text explaining why the bits are gone.
+			setVisible(!tooManyBytesToHandle);
+		}
+		return !tooManyBytesToHandle;
+	}
+
 	void initAdd(int bitSize, int bitOffset) {
 		editMode = EditMode.ADD;
 		editOrdinal = -1;
@@ -275,6 +293,9 @@ public class BitFieldPlacementComponent extends JPanel {
 	}
 
 	void init(DataTypeComponent editDtc) {
+		if (!checkIsEnabled()) {
+			return;
+		}
 
 		if (editDtc == null || editDtc.isFlexibleArrayComponent()) {
 			editMode = EditMode.NONE;
@@ -465,7 +486,7 @@ public class BitFieldPlacementComponent extends JPanel {
 	 * @return component rectangle or null
 	 */
 	Rectangle getComponentRectangle(DataTypeComponent dtc, boolean extendToByteBoundary) {
-		if (bitFieldAllocation == null || dtc == null) {
+		if (!checkIsEnabled() || bitFieldAllocation == null || dtc == null) {
 			return null;
 		}
 
@@ -526,6 +547,9 @@ public class BitFieldPlacementComponent extends JPanel {
 
 	@Override
 	public void paintComponent(Graphics g) {
+		if (!checkIsEnabled()) {
+			return;
+		}
 
 		//super.paintComponent(g);
 
@@ -800,11 +824,16 @@ public class BitFieldPlacementComponent extends JPanel {
 		}
 
 		private void refresh() {
-			allocateBits();
-			layoutBits();
+			if (checkIsEnabled()) {
+				allocateBits();
+				layoutBits();
+			}
 		}
 
 		private void allocateBits() {
+			if (!checkIsEnabled()) {
+				return;
+			}
 
 			if (composite == null) {
 				bitAttributes = new BitAttributes[0];
@@ -837,6 +866,10 @@ public class BitFieldPlacementComponent extends JPanel {
 		}
 
 		private void layoutBits() {
+			if (!checkIsEnabled()) {
+				return;
+			}
+
 			int x = BYTE_SEPARATOR_THICKNESS;
 			int y = (2 * BYTE_SEPARATOR_THICKNESS) + CELL_HEIGHT;
 			int width = bitWidth + BIT_SEPARATOR_THICKNESS;
